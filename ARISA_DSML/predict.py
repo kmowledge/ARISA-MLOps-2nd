@@ -84,9 +84,10 @@ if __name__=="__main__":
     analysis_df["predicted_probability"] = df_preds["predicted_probability"]
 
     from ARISA_DSML.train import get_or_create_experiment
-
+    from ARISA_DSML.helpers import get_git_commit_hash
+    git_hash = get_git_commit_hash()
     mlflow.set_experiment("titanic_predictions")
-    with mlflow.start_run():
+    with mlflow.start_run(tags={"git_sha": get_git_commit_hash()}):
         estimated_performance = estimator.estimate(analysis_df)
         fig1 = estimated_performance.plot()
         mlflow.log_figure(fig1, "estimated_performance.png")
@@ -100,4 +101,4 @@ if __name__=="__main__":
                 mlflow.log_figure(fig3, f"univariate_drift_dist_{p}.png")
             except:
                 logger.info("failed to plot some univariate drift analyses!")
-
+        mlflow.log_params({"git_hash": git_hash})
