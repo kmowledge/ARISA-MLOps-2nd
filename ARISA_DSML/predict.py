@@ -75,7 +75,7 @@ if __name__=="__main__":
     
     params = run_data_dict["params"]
     params["feature_columns"] = [inp["name"] for inp in json.loads(log_model_meta[0]['signature']['inputs'])]
-    preds_path = predict(loaded_model, df_test, params)
+    preds_path = predict(loaded_model, df_test, params, probs=True)
     
     df_preds = pd.read_csv(preds_path)
 
