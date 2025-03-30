@@ -24,7 +24,7 @@ from ARISA_DSML.helpers import get_git_commit_hash
 import nannyml as nml
 
 
-# comment to trigger workflow ver4
+# comment to trigger workflow ver5
 
 def run_hyperopt(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:list[int], test_size:float=0.25, n_trials:int=20, overwrite:bool=False)->str|Path:  # noqa: PLR0913
     """Run optuna hyperparameter tuning."""
