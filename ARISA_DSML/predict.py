@@ -12,6 +12,7 @@ from ARISA_DSML.resolve import get_model_by_alias
 import mlflow
 from mlflow.client import MlflowClient
 import json
+import nannyml as nml
 
 
 def plot_shap(model:CatBoostClassifier, df_plot:pd.DataFrame)->None:
@@ -23,15 +24,22 @@ def plot_shap(model:CatBoostClassifier, df_plot:pd.DataFrame)->None:
     plt.savefig(FIGURES_DIR / "test_shap_overall.png")
 
 
-def predict(model:CatBoostClassifier, df_pred:pd.DataFrame, params:dict)->str|Path:
+def predict(model:CatBoostClassifier, df_pred:pd.DataFrame, params:dict, probs=False)->str|Path:
     """Do predictions on test data."""
+    
     feature_columns = params.pop("feature_columns")
-
+    
     preds = model.predict(df_pred[feature_columns])
+    if probs:
+        df_pred["predicted_probability"] = [p[1] for p in model.predict_proba(df_pred[feature_columns])]
+
     plot_shap(model, df_pred[feature_columns])
     df_pred[target] = preds
     preds_path = MODELS_DIR / "preds.csv"
-    df_pred[["PassengerId", target]].to_csv(preds_path, index=False)
+    if not probs:
+        df_pred[["PassengerId", target]].to_csv(preds_path, index=False)
+    else:
+        df_pred[["PassengerId", target, "predicted_probability"]].to_csv(preds_path, index=False)
 
     return preds_path
 
@@ -58,8 +66,38 @@ if __name__=="__main__":
     logger.info(model_uri)
     loaded_model = mlflow.catboost.load_model(model_uri)
 
+    local_path = client.download_artifacts(model_info.run_id, "udc.pkl", "models")
+    local_path = client.download_artifacts(model_info.run_id, "estimator.pkl", "models")
+
+    store = nml.io.store.FilesystemStore(root_path=str(MODELS_DIR))
+    udc = store.load(filename="udc.pkl", as_type=nml.UnivariateDriftCalculator)
+    estimator = store.load(filename="estimator.pkl", as_type=nml.CBPE)
+    
     params = run_data_dict["params"]
     params["feature_columns"] = [inp["name"] for inp in json.loads(log_model_meta[0]['signature']['inputs'])]
     preds_path = predict(loaded_model, df_test, params)
+    
+    df_preds = pd.read_csv(preds_path)
 
+    analysis_df = df_test.copy()
+    analysis_df["prediction"] = df_preds[target]
+    analysis_df["predicted_probability"] = df_preds["predicted_probability"]
+
+    from ARISA_DSML.train import get_or_create_experiment
+
+    mlflow.set_experiment("titanic_predictions")
+    with mlflow.start_run():
+        estimated_performance = estimator.estimate(analysis_df)
+        fig1 = estimated_performance.plot()
+        mlflow.log_figure(fig1, "estimated_performance.png")
+        univariate_drift = udc.calculate(analysis_df.drop(columns=["PassengerId", "prediction", "predicted_probability"], axis=1))
+        plot_col_names = analysis_df.drop(columns=["PassengerId", "prediction", "predicted_probability"], axis=1).columns
+        for p in plot_col_names:
+            try:
+                fig2 = univariate_drift.filter(column_names=[p]).plot()
+                mlflow.log_figure(fig2, f"univariate_drift_{p}.png")
+                fig3 = univariate_drift.filter(period="analysis", column_names=[p]).plot(kind='distribution')
+                mlflow.log_figure(fig3, f"univariate_drift_dist_{p}.png")
+            except:
+                logger.info("failed to plot some univariate drift analyses!")
 
