@@ -18,7 +18,6 @@ from ARISA_DSML.config import (
     target,
 )
 
-
 def run_hyperopt(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:list[int], test_size:float=0.25, n_trials:int=20, overwrite:bool=False)->str|Path:  # noqa: PLR0913
     """Run optuna hyperparameter tuning."""
     best_params_path = MODELS_DIR / "best_params.pkl"
@@ -56,6 +55,39 @@ def run_hyperopt(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices
 
     return best_params_path
 
+
+def get_or_create_experiment(experiment_name:str):
+    """Retrieve the ID of an existing MLflow experiment or create a new one if it doesn't exist.
+
+
+
+    This function checks if an experiment with the given name exists within MLflow.
+    If it does, the function returns its ID. If not, it creates a new experiment
+    with the provided name and returns its ID.
+
+
+
+    Parameters
+    ----------
+    - experiment_name (str): Name of the MLflow experiment.
+
+
+
+    Returns
+    -------
+    - str: ID of the existing or newly created MLflow experiment.
+
+
+
+    """
+    if experiment := mlflow.get_experiment_by_name(experiment_name):
+        return experiment.experiment_id
+
+
+
+    return mlflow.create_experiment(experiment_name)
+
+ 
 
 def train_cv(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:list[int], params:dict, eval_metric:str="F1", n:int=5)->str|Path:  # noqa: PLR0913
     """Do cross-validated training."""
