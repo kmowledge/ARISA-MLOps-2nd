@@ -18,12 +18,14 @@ from ARISA_DSML.config import (
     target,
 )
 
+mlflow.set_tracking_uri("http://127.0.0.1:5000")
+
 def run_hyperopt(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:list[int], test_size:float=0.25, n_trials:int=20, overwrite:bool=False)->str|Path:  # noqa: PLR0913
     """Run optuna hyperparameter tuning."""
     best_params_path = MODELS_DIR / "best_params.pkl"
     if not best_params_path.is_file() or overwrite:
         X_train_opt, X_val_opt, y_train_opt, y_val_opt = train_test_split(X_train, y_train, test_size=test_size, random_state=42)
-
+        
         def objective(trial:optuna.trial.Trial)->float:
             params = {
                 "depth": trial.suggest_int("depth", 2, 10),
