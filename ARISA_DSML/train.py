@@ -10,6 +10,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from sklearn.model_selection import train_test_split
 import mlflow
+from sklearn.metrics import f1_score, roc_auc_score
 
 from ARISA_DSML.config import (
     FIGURES_DIR,
@@ -21,11 +22,15 @@ from ARISA_DSML.config import (
 
 mlflow.set_tracking_uri("http://127.0.0.1:5000")
 
-def run_hyperopt(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:list[int], test_size:float=0.25, n_trials:int=20, overwrite:bool=False)->str|Path:  # noqa: PLR0913
+
+def run_hyperopt(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:list[int], test_size:float=0.25, n_trials:int=20, overwrite:bool=False)->str|Path: # noqa: PLR0913
     """Run optuna hyperparameter tuning."""
     best_params_path = MODELS_DIR / "best_params.pkl"
     if not best_params_path.is_file() or overwrite:
         X_train_opt, X_val_opt, y_train_opt, y_val_opt = train_test_split(X_train, y_train, test_size=test_size, random_state=42)
+        best_model = None  # Store best model
+        best_params = None  # Store best parameters
+
         with mlflow.start_run(nested=True):
             def objective(trial:optuna.trial.Trial)->float:
                 params = {
@@ -45,17 +50,29 @@ def run_hyperopt(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices
                     cat_features=categorical_indices,
                     early_stopping_rounds=50,
                 )
+                nonlocal best_model, best_params
+                if study.best_trial == trial:
+                    best_model = model
+                    best_params = params
                 return model.get_best_score()["validation"]["Logloss"]
+
             study = optuna.create_study(direction="minimize")
             study.optimize(objective, n_trials=n_trials)
-            mlflow.log_params(params)
-            preds = model.predict(X_val_opt)
-            probs = model.predict_proba(X_val_opt)
-            f1 = f1_score(y_val_opt, preds)
-            mlflow.log_metric("f1")
-            mlflow.log_artifact(best_params_path)
-        joblib.dump(study.best_params, best_params_path)
 
+            if best_model is not None:
+                mlflow.log_params(best_params)
+                preds = best_model.predict(X_val_opt)
+                probs = best_model.predict_proba(X_val_opt)
+                f1 = f1_score(y_val_opt, preds)
+                roc_auc = roc_auc_score(y_val_opt, probs[:, 1])
+                mlflow.log_metrics({
+                    "f1": f1,
+                    "roc_auc": roc_auc,
+                    "positive_class_mean_prob": probs[:, 1].mean(),
+                })
+                mlflow.log_artifact(best_params_path)
+
+        joblib.dump(study.best_params, best_params_path)
         params = study.best_params
     else:
         params = joblib.load(best_params_path)
@@ -90,12 +107,8 @@ def get_or_create_experiment(experiment_name:str):
     """
     if experiment := mlflow.get_experiment_by_name(experiment_name):
         return experiment.experiment_id
-
-
-
     return mlflow.create_experiment(experiment_name)
 
- 
 
 def train_cv(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:list[int], params:dict, eval_metric:str="F1", n:int=5)->str|Path:  # noqa: PLR0913
     """Do cross-validated training."""
