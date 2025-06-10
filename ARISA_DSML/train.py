@@ -9,6 +9,7 @@ import optuna
 import pandas as pd
 import plotly.graph_objects as go
 from sklearn.model_selection import train_test_split
+import mlflow
 
 from ARISA_DSML.config import (
     FIGURES_DIR,
@@ -120,35 +121,40 @@ def train_cv(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:lis
     return cv_output_path
 
 
-def train(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:list[int], params:dict|None, artifact_name:str="catboost_model_titanic")->tuple[str|Path]:
+def train(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:list[int], params:dict|None, artifact_name:str="catboost_model_titanic", cv_metric_mean:float=0.0)->tuple[str|Path]:
     """Train model on full dataset."""
     if params is None:
         logger.info("Training model without tuned hyperparameters")
         params = {}
 
-    params["ignored_features"] = [0]
+    with mlflow.start_run():
+        params["ignored_features"] = [0]
 
-    model = CatBoostClassifier(
-        **params,
-        verbose=True,
-    )
+        model = CatBoostClassifier(
+            **params,
+            verbose=True,
+        )
 
-    model.fit(
-        X_train,
-        y_train,
-        verbose_eval=50,
-        early_stopping_rounds=50,
-        cat_features=categorical_indices,
-        use_best_model=False,
-        plot=True,
-    )
+        model.fit(
+            X_train,
+            y_train,
+            verbose_eval=50,
+            early_stopping_rounds=50,
+            cat_features=categorical_indices,
+            use_best_model=False,
+            plot=True,
+        )
 
-    params["feature_columns"] = X_train.columns
-    model_path = MODELS_DIR / f"{artifact_name}.cbm"
-    model.save_model(model_path)
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    model_params_path = MODELS_DIR / "model_params.pkl"
-    joblib.dump(params, model_params_path)
+        mlflow.log_params(params)
+        params["feature_columns"] = X_train.columns
+        model_path = MODELS_DIR / f"{artifact_name}.cbm"
+        model.save_model(model_path)
+        mlflow.log_artifact(model_path)
+        mlflow.log_metric("f1_cv_mean", cv_metric_mean)
+
+        MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        model_params_path = MODELS_DIR / "model_params.pkl"
+        joblib.dump(params, model_params_path)
 
     return (model_path, model_params_path)
 

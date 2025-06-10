@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/b04179dd1da24f178d12c759fc2db107/artifacts
+end_time: 1749578098994
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: b04179dd1da24f178d12c759fc2db107
+run_name: thundering-ox-440
+run_uuid: b04179dd1da24f178d12c759fc2db107
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1749578097194
+status: 3
+tags: []
+user_id: oo
