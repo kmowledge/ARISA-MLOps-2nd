@@ -48,7 +48,11 @@ def run_hyperopt(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices
             study = optuna.create_study(direction="minimize")
             study.optimize(objective, n_trials=n_trials)
             mlflow.log_params(params)
-
+            preds = model.predict(X_val_opt)
+            probs = model.predict_proba(X_val_opt)
+            f1 = f1_score(y_val_opt, preds)
+            mlflow.log_metric("f1")
+            mlflow.log_artifact(best_params_path)
         joblib.dump(study.best_params, best_params_path)
 
         params = study.best_params
