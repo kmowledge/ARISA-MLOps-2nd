@@ -47,6 +47,7 @@ def run_hyperopt(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices
                 return model.get_best_score()["validation"]["Logloss"]
             study = optuna.create_study(direction="minimize")
             study.optimize(objective, n_trials=n_trials)
+            mlflow.log_params(params)
 
         joblib.dump(study.best_params, best_params_path)
 
