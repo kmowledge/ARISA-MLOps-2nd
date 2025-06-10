@@ -9,6 +9,8 @@ import optuna
 import pandas as pd
 import plotly.graph_objects as go
 from sklearn.model_selection import train_test_split
+import mlflow
+from sklearn.metrics import f1_score, roc_auc_score
 
 from ARISA_DSML.config import (
     FIGURES_DIR,
@@ -18,43 +20,94 @@ from ARISA_DSML.config import (
     target,
 )
 
+mlflow.set_tracking_uri("http://127.0.0.1:5000")
 
-def run_hyperopt(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:list[int], test_size:float=0.25, n_trials:int=20, overwrite:bool=False)->str|Path:  # noqa: PLR0913
+
+def run_hyperopt(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:list[int], test_size:float=0.25, n_trials:int=20, overwrite:bool=False)->str|Path: # noqa: PLR0913
     """Run optuna hyperparameter tuning."""
     best_params_path = MODELS_DIR / "best_params.pkl"
     if not best_params_path.is_file() or overwrite:
         X_train_opt, X_val_opt, y_train_opt, y_val_opt = train_test_split(X_train, y_train, test_size=test_size, random_state=42)
+        best_model = None  # Store best model
+        best_params = None  # Store best parameters
 
-        def objective(trial:optuna.trial.Trial)->float:
-            params = {
-                "depth": trial.suggest_int("depth", 2, 10),
-                "learning_rate": trial.suggest_float("learning_rate", 1e-4, 0.3),
-                "iterations": trial.suggest_int("iterations", 50, 300),
-                "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 1e-5, 100.0, log=True),
-                "bagging_temperature": trial.suggest_float("bagging_temperature", 0.01, 1),
-                "random_strength": trial.suggest_float("random_strength", 1e-5, 100.0, log=True),
-                "ignored_features": [0],
-            }
-            model = CatBoostClassifier(**params, verbose=0)
-            model.fit(
-                X_train_opt,
-                y_train_opt,
-                eval_set=(X_val_opt, y_val_opt),
-                cat_features=categorical_indices,
-                early_stopping_rounds=50,
-            )
-            return model.get_best_score()["validation"]["Logloss"]
-        study = optuna.create_study(direction="minimize")
-        study.optimize(objective, n_trials=n_trials)
+        with mlflow.start_run(nested=True):
+            def objective(trial:optuna.trial.Trial)->float:
+                params = {
+                    "depth": trial.suggest_int("depth", 2, 10),
+                    "learning_rate": trial.suggest_float("learning_rate", 1e-4, 0.3),
+                    "iterations": trial.suggest_int("iterations", 50, 300),
+                    "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 1e-5, 100.0, log=True),
+                    "bagging_temperature": trial.suggest_float("bagging_temperature", 0.01, 1),
+                    "random_strength": trial.suggest_float("random_strength", 1e-5, 100.0, log=True),
+                    "ignored_features": [0],
+                }
+                model = CatBoostClassifier(**params, verbose=0)
+                model.fit(
+                    X_train_opt,
+                    y_train_opt,
+                    eval_set=(X_val_opt, y_val_opt),
+                    cat_features=categorical_indices,
+                    early_stopping_rounds=50,
+                )
+                nonlocal best_model, best_params
+                if study.best_trial == trial:
+                    best_model = model
+                    best_params = params
+                return model.get_best_score()["validation"]["Logloss"]
+
+            study = optuna.create_study(direction="minimize")
+            study.optimize(objective, n_trials=n_trials)
+
+            if best_model is not None:
+                mlflow.log_params(best_params)
+                preds = best_model.predict(X_val_opt)
+                probs = best_model.predict_proba(X_val_opt)
+                f1 = f1_score(y_val_opt, preds)
+                roc_auc = roc_auc_score(y_val_opt, probs[:, 1])
+                mlflow.log_metrics({
+                    "f1": f1,
+                    "roc_auc": roc_auc,
+                    "positive_class_mean_prob": probs[:, 1].mean(),
+                })
+                mlflow.log_artifact(best_params_path)
 
         joblib.dump(study.best_params, best_params_path)
-
         params = study.best_params
     else:
         params = joblib.load(best_params_path)
     logger.info("Best Parameters: " + json.dumps(params))
 
     return best_params_path
+
+
+def get_or_create_experiment(experiment_name:str):
+    """Retrieve the ID of an existing MLflow experiment or create a new one if it doesn't exist.
+
+
+
+    This function checks if an experiment with the given name exists within MLflow.
+    If it does, the function returns its ID. If not, it creates a new experiment
+    with the provided name and returns its ID.
+
+
+
+    Parameters
+    ----------
+    - experiment_name (str): Name of the MLflow experiment.
+
+
+
+    Returns
+    -------
+    - str: ID of the existing or newly created MLflow experiment.
+
+
+
+    """
+    if experiment := mlflow.get_experiment_by_name(experiment_name):
+        return experiment.experiment_id
+    return mlflow.create_experiment(experiment_name)
 
 
 def train_cv(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:list[int], params:dict, eval_metric:str="F1", n:int=5)->str|Path:  # noqa: PLR0913
@@ -81,35 +134,40 @@ def train_cv(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:lis
     return cv_output_path
 
 
-def train(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:list[int], params:dict|None, artifact_name:str="catboost_model_titanic")->tuple[str|Path]:
+def train(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:list[int], params:dict|None, artifact_name:str="catboost_model_titanic", cv_metric_mean:float=0.0)->tuple[str|Path]:
     """Train model on full dataset."""
     if params is None:
         logger.info("Training model without tuned hyperparameters")
         params = {}
 
-    params["ignored_features"] = [0]
+    with mlflow.start_run():
+        params["ignored_features"] = [0]
 
-    model = CatBoostClassifier(
-        **params,
-        verbose=True,
-    )
+        model = CatBoostClassifier(
+            **params,
+            verbose=True,
+        )
 
-    model.fit(
-        X_train,
-        y_train,
-        verbose_eval=50,
-        early_stopping_rounds=50,
-        cat_features=categorical_indices,
-        use_best_model=False,
-        plot=True,
-    )
+        model.fit(
+            X_train,
+            y_train,
+            verbose_eval=50,
+            early_stopping_rounds=50,
+            cat_features=categorical_indices,
+            use_best_model=False,
+            plot=True,
+        )
 
-    params["feature_columns"] = X_train.columns
-    model_path = MODELS_DIR / f"{artifact_name}.cbm"
-    model.save_model(model_path)
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    model_params_path = MODELS_DIR / "model_params.pkl"
-    joblib.dump(params, model_params_path)
+        mlflow.log_params(params)
+        params["feature_columns"] = X_train.columns
+        model_path = MODELS_DIR / f"{artifact_name}.cbm"
+        model.save_model(model_path)
+        mlflow.log_artifact(model_path)
+        mlflow.log_metric("f1_cv_mean", cv_metric_mean)
+
+        MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        model_params_path = MODELS_DIR / "model_params.pkl"
+        joblib.dump(params, model_params_path)
 
     return (model_path, model_params_path)
 

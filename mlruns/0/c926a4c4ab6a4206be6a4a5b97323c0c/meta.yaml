@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/c926a4c4ab6a4206be6a4a5b97323c0c/artifacts
+end_time: 1749578045779
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: c926a4c4ab6a4206be6a4a5b97323c0c
+run_name: redolent-skink-435
+run_uuid: c926a4c4ab6a4206be6a4a5b97323c0c
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1749578044238
+status: 4
+tags: []
+user_id: oo
