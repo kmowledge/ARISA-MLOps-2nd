@@ -36,6 +36,8 @@ jobs:
   train:
     runs-on: ubuntu-latest
     needs: preprocess
+    env:
+      MLFLOW_TRACKING_URI: ${{ vars.MLFLOW_TRACKING_URI }}
     steps: 
       - name: Checkout repository
         uses: actions/checkout@v4

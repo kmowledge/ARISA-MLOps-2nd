@@ -16,12 +16,12 @@ from ARISA_DSML.config import (
     FIGURES_DIR,
     MODELS_DIR,
     PROCESSED_DATA_DIR,
+    MLFLOW_TRACKING_URI
     categorical,
     target,
 )
 
-mlflow.set_tracking_uri("http://127.0.0.1:5000")
-
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
 def run_hyperopt(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices:list[int], test_size:float=0.25, n_trials:int=20, overwrite:bool=False)->str|Path: # noqa: PLR0913
     """Run optuna hyperparameter tuning."""
