@@ -25,28 +25,28 @@ def run_hyperopt(X_train:pd.DataFrame, y_train:pd.DataFrame, categorical_indices
     best_params_path = MODELS_DIR / "best_params.pkl"
     if not best_params_path.is_file() or overwrite:
         X_train_opt, X_val_opt, y_train_opt, y_val_opt = train_test_split(X_train, y_train, test_size=test_size, random_state=42)
-        
-        def objective(trial:optuna.trial.Trial)->float:
-            params = {
-                "depth": trial.suggest_int("depth", 2, 10),
-                "learning_rate": trial.suggest_float("learning_rate", 1e-4, 0.3),
-                "iterations": trial.suggest_int("iterations", 50, 300),
-                "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 1e-5, 100.0, log=True),
-                "bagging_temperature": trial.suggest_float("bagging_temperature", 0.01, 1),
-                "random_strength": trial.suggest_float("random_strength", 1e-5, 100.0, log=True),
-                "ignored_features": [0],
-            }
-            model = CatBoostClassifier(**params, verbose=0)
-            model.fit(
-                X_train_opt,
-                y_train_opt,
-                eval_set=(X_val_opt, y_val_opt),
-                cat_features=categorical_indices,
-                early_stopping_rounds=50,
-            )
-            return model.get_best_score()["validation"]["Logloss"]
-        study = optuna.create_study(direction="minimize")
-        study.optimize(objective, n_trials=n_trials)
+        with mlflow.start_run(nested=True):
+            def objective(trial:optuna.trial.Trial)->float:
+                params = {
+                    "depth": trial.suggest_int("depth", 2, 10),
+                    "learning_rate": trial.suggest_float("learning_rate", 1e-4, 0.3),
+                    "iterations": trial.suggest_int("iterations", 50, 300),
+                    "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 1e-5, 100.0, log=True),
+                    "bagging_temperature": trial.suggest_float("bagging_temperature", 0.01, 1),
+                    "random_strength": trial.suggest_float("random_strength", 1e-5, 100.0, log=True),
+                    "ignored_features": [0],
+                }
+                model = CatBoostClassifier(**params, verbose=0)
+                model.fit(
+                    X_train_opt,
+                    y_train_opt,
+                    eval_set=(X_val_opt, y_val_opt),
+                    cat_features=categorical_indices,
+                    early_stopping_rounds=50,
+                )
+                return model.get_best_score()["validation"]["Logloss"]
+            study = optuna.create_study(direction="minimize")
+            study.optimize(objective, n_trials=n_trials)
 
         joblib.dump(study.best_params, best_params_path)
 
