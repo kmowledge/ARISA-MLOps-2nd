@@ -16,9 +16,9 @@ from ARISA_DSML.config import (
     FIGURES_DIR,
     MODELS_DIR,
     PROCESSED_DATA_DIR,
-    MLFLOW_TRACKING_URI
+    MLFLOW_TRACKING_URI,
     categorical,
-    target,
+    target
 )
 
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
