@@ -1,0 +1,12 @@
+PassengerId,Survived,Pclass,Name,Sex,Age,SibSp,Parch,Ticket,Fare,Cabin,Embarked
+1,1,3,"Doe, Mr. John A",male,32,0,0,A/5 25929,10.0,G0,S
+2,1,3,"Doe, Mr. John B",male,31,0,0,A/5 21922,10.0,G0,S
+3,1,3,"Doe, Mr. John C",male,38,0,0,A/5 27880,10.0,G0,S
+4,1,3,"Smith, Dr. John D",male,4049,0,0,A/5 27972,10.0,G0,S
+5,1,3,"Doe, Mr. John E",male,38,0,0,A/5 28062,10.0,G0,S
+6,1,3,"Doe, Mr. John F",male,33,0,0,A/5 27776,10.0,G0,S
+7,1,3,"Doe, Mr. John G",male,32,0,0,A/5 21643,10.0,G0,S
+8,1,3,"Doe, Mr. John H",male,32,0,0,A/5 28382,10.0,G0,S
+9,1,3,"Doe, Mr. John I",male,33,0,0,A/5 20679,10.0,G0,S
+10,1,3,"Doe, Mr. John J",male,36,0,0,A/5 24955,10.0,G0,S
+11,0,2,"Doe, Miss. Jane",female,28,0,0,B/7 12345,20.0,N12,Q

@@ -37,3 +37,11 @@ preprocess:
 .PHONY: train
 train:
 	python -m ARISA_DSML.train
+
+.PHONY: resolve
+resolve:
+	python -m ARISA_DSML.resolve
+
+.PHONY: predict
+predict:
+	python -m ARISA_DSML.predict
